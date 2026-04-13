@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-multipart
+pydantic
+duckdb
+sqlalchemy
+pandas
+google-genai
+python-dotenv
+apscheduler
+openpyxl
+phonenumbers
+casparser
+rapidfuzz
+requests
+python-jose[cryptography]
