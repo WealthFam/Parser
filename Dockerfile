@@ -2,10 +2,10 @@
 FROM python:3.11-slim
 
 # 1. Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-ENV PYTHONPATH /app
-ENV PARSER_DATABASE_URL "duckdb:////data/ingestion_engine_parser.duckdb"
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+ENV PARSER_DATABASE_URL="duckdb:////data/ingestion_engine_parser.duckdb"
 
 # 2. Set working directory
 WORKDIR /app
