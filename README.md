@@ -2,9 +2,9 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/Version-2.2.15-1b5e20?style=for-the-badge)](https://github.com/oksbwn/wealthfam/parser)
+[![Version](https://img.shields.io/badge/Version-2.2.15-4338ca?style=for-the-badge)](https://github.com/WealthFam/parser)
 [![Framework](https://img.shields.io/badge/FastAPI-0.109+-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Logic](https://img.shields.io/badge/Parsing-Multi_Tier-0891b2?style=for-the-badge)](https://fastapi.tiangolo.com/)
+[![Status](https://img.shields.io/badge/Docs-Technical_Hub-e11d48?style=for-the-badge)](https://wealthfam.github.io/docs)
 
 **The high-performance ingestion backbone of the WealthFam ecosystem.**  
 *Stateless, AI-augmented, and optimized for sub-second transaction parsing.*
@@ -19,7 +19,10 @@ The WealthFam Parser is a specialized microservice dedicated to transforming uns
 
 ---
 
-## 🛠️ Ingestion Engines
+## 🛠️ Ingestion Engines at a Glance
+
+For a detailed breakdown of our tiered parsing logic, see:  
+[**📖 Deep Dive: Data Ingestion Flow**](../Docs/technical/architecture/ingestion.md)
 
 | Tier | Engine | Description |
 | :--- | :--- | :--- |
@@ -29,19 +32,22 @@ The WealthFam Parser is a specialized microservice dedicated to transforming uns
 
 ---
 
-## 🏁 Development
+## 🏗️ Architecture
 
-To setup the parser locally or extend the ingestion logic, please visit the unified guide:
+The parser is designed to be highly scalable and stateless, allowing for rapid horizontal scaling during peak ingestion periods (e.g., month-end).
 
-[**🛠️ In-Depth Setup Guide**](../../Docs/technical/development/setup.md)
+- **[🏛️ System Overview](../Docs/technical/architecture/system_overview.md)**
+- **[📐 Ingestion Engineering](../Docs/technical/architecture/ingestion.md)**
 
 ---
 
-## 📖 Key Documentation
-- **[📐 Ingestion Engineering](../../Docs/technical/architecture/ingestion.md)**: Master parsing logic details.
-- **[🛠️ Technical Setup](../../Docs/technical/development/setup.md)**: Local installation guide.
+## 🏁 Development Setup
+
+To setup the parser locally or extend the ingestion logic:
+
+[**🛠️ Master Setup Guide**](../Docs/technical/getting_started.md)
 
 ---
 <div align="center">
-*Developed by the WealthFam Parser Team*
+*Maintained by the WealthFam Parser Engineering Team*
 </div>
