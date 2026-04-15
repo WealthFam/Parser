@@ -4,7 +4,8 @@
 
 [![Version](https://img.shields.io/badge/Version-2.2.15-4338ca?style=for-the-badge)](https://github.com/WealthFam/parser)
 [![Framework](https://img.shields.io/badge/FastAPI-0.109+-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Status](https://img.shields.io/badge/Docs-Technical_Hub-e11d48?style=for-the-badge)](https://wealthfam.github.io/docs)
+[![Status](https://img.shields.io/badge/Docs-Technical_Hub-ffab00?style=for-the-badge)](https://wealthfam.github.io/docs)
+[![Docker Hub](https://img.shields.io/badge/Docker_Hub-wglabz/wealthfam--parser-blue?style=for-the-badge&logo=docker)](https://hub.docker.com/r/wglabz/wealthfam-parser)
 
 **The high-performance ingestion backbone of the WealthFam ecosystem.**  
 *Stateless, AI-augmented, and optimized for sub-second transaction parsing.*
