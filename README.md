@@ -2,9 +2,9 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/Version-2.2.15-4338ca?style=for-the-badge)](https://github.com/WealthFam/parser)
+[![Version](https://img.shields.io/badge/Version-2.2.15-4338ca?style=for-the-badge)](https://github.com/WealthFam/Parser)
 [![Framework](https://img.shields.io/badge/FastAPI-0.109+-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Build Status](https://github.com/WealthFam/parser/actions/workflows/docker-build.yml/badge.svg)](https://github.com/WealthFam/parser/actions)
+[![Build Status](https://github.com/WealthFam/Parser/actions/workflows/docker-build.yml/badge.svg?branch=master)](https://github.com/WealthFam/Parser/actions)
 [![Docker Hub](https://img.shields.io/docker/v/wglabz/wealthfam-parser?logo=docker&style=for-the-badge&color=0db7ed)](https://hub.docker.com/r/wglabz/wealthfam-parser)
 [![Docs](https://img.shields.io/badge/Docs-Technical_Hub-e11d48?style=for-the-badge)](https://wealthfam.github.io/docs)
 
