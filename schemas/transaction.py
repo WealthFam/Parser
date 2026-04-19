@@ -37,8 +37,8 @@ class TransactionMeta(BaseModel):
     confidence: float
     parser_used: str
     source_original: str
-    units: Optional[float] = None
-    nav: Optional[float] = None
+    units: Optional[Decimal] = None
+    nav: Optional[Decimal] = None
     amfi: Optional[str] = None
     isin: Optional[str] = None
     is_synthesized: bool = False

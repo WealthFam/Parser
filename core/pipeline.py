@@ -1,20 +1,15 @@
-from sqlalchemy.orm import Session
-from typing import Optional, Any
-from parser.core.classifier import FinancialClassifier
-from parser.parsers.registry import ParserRegistry
-from parser.db.models import RequestLog, PatternRule, AICallCache
-import hashlib
-from datetime import datetime, timedelta
-from parser.core import timezone
-from rapidfuzz import fuzz
-from decimal import Decimal
-from parser.schemas.transaction import Transaction, IngestionResult, ParsedItem, AccountInfo, MerchantInfo, TransactionType
-from parser.parsers.patterns.regex_engine import PatternParser
-from parser.parsers.ai.gemini_parser import GeminiParser
-from parser.core.normalizer import MerchantNormalizer
-from parser.core.validator import TransactionValidator
-from parser.core.guesser import CategoryGuesser
 import logging
+import hashlib
+from datetime import datetime, timedelta, date
+from decimal import Decimal
+from typing import Optional, Any, List
+
+from sqlalchemy.orm import Session
+from rapidfuzz import fuzz
+
+from parser.core import timezone
+from parser.db.models import RequestLog, PatternRule, AICallCache
+from parser.schemas.transaction import Transaction, IngestionResult, ParsedItem, AccountInfo, MerchantInfo, TransactionType, TransactionMeta
 
 class AIGuardrailBlocked(Exception):
     """Exception raised when content is blocked by AI Guardrail heuristics."""
@@ -40,6 +35,38 @@ class IngestionPipeline:
     def __init__(self, db: Session, tenant_id: str):
         self.db = db
         self.tenant_id = tenant_id
+
+    def process_cas_data(self, data: List[dict]) -> List[ParsedItem]:
+        """
+        Process raw CAS dictionary data into a list of WealthFam ParsedItems.
+        Adheres to WealthFam service patterns by ensuring Decimal precision and robust schema mapping.
+        """
+        results = []
+        for t_dict in data:
+            try:
+                # 1. Convert to internal transaction schema (handles dates and categorization)
+                t = self._convert_to_schema_txn(t_dict)
+                
+                # 2. Extract and sanitize metadata
+                item = ParsedItem(
+                    status="extracted",
+                    transaction=t,
+                    metadata=TransactionMeta(
+                        confidence=1.0,
+                        parser_used="CasParser",
+                        source_original="CAS",
+                        units=get_decimal(t_dict.get("units") or t_dict.get("balance")),
+                        nav=get_decimal(t_dict.get("nav")),
+                        amfi=str(t_dict.get("amfi") or ""),
+                        isin=str(t_dict.get("isin") or ""),
+                        is_synthesized=bool(t_dict.get("is_synthesized", False))
+                    )
+                )
+                results.append(item)
+            except Exception as e:
+                logger.error(f"Failed to process CAS item: {e}")
+                continue
+        return results
 
     def _convert_to_schema_txn(self, pt: Any, date_hint: Optional[Any] = None) -> Transaction:
         """Helper to convert backend-style ParsedTransaction or dict to microservice Transaction"""
@@ -78,8 +105,12 @@ class IngestionPipeline:
                 try:
                     final_date = datetime.fromisoformat(pt_date)
                 except: pass
-            elif isinstance(pt_date, datetime):
-                final_date = pt_date
+            elif isinstance(pt_date, (datetime, date)):
+                # Synchronize to datetime if it's just a date
+                if isinstance(pt_date, datetime):
+                    final_date = pt_date
+                else:
+                    final_date = datetime.combine(pt_date, datetime.min.time())
             
             # Fallback to date_hint if available, otherwise now
             if not final_date:

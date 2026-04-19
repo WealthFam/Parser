@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 import json
 import hashlib
@@ -36,6 +36,7 @@ from parser.parsers.registry import ParserRegistry
 from parser.parsers.file.universal_parser import UniversalParser
 from parser.parsers.cas.cas_parser import CasParser
 from parser.db.models import FileParsingConfig
+router = APIRouter(prefix="/v1/ingest", tags=["Ingestion"])
 
 # Register SMS Parsers
 ParserRegistry.register_sms(HdfcSmsParser())
@@ -249,34 +250,20 @@ async def ingest_cas(
     from parser.db.models import RequestLog
     
     try:
+        # 1. Extract raw data from PDF
         data = CasParser.parse(content, password)
-        pipeline = IngestionPipeline(db, tenant_id=tenant_id)
-        results = []
         
-        for t_dict in data:
-            t = pipeline._convert_to_schema_txn(t_dict)
-            item = ParsedItem(
-                status="extracted",
-                transaction=t,
-                metadata=TransactionMeta(
-                    confidence=1.0, 
-                    parser_used="CasParser", 
-                    source_original="CAS",
-                    units=t_dict.get("units"),
-                    nav=t_dict.get("nav"),
-                    amfi=t_dict.get("amfi"),
-                    isin=t_dict.get("isin"),
-                    is_synthesized=t_dict.get("is_synthesized", False)
-                )
-            )
-            results.append(item)
-            
+        # 2. Process into WealthFam schema via Pipeline Service
+        pipeline = IngestionPipeline(db, tenant_id=tenant_id)
+        results = pipeline.process_cas_data(data)
+        
         output = IngestionResult(
             status="success" if results else "failed",
             results=results,
             logs=[]
         )
         
+        # 3. Log extraction result
         db.add(RequestLog(
             tenant_id=tenant_id,
             input_hash=file_hash,
@@ -297,5 +284,4 @@ async def ingest_cas(
             output_payload={"error": str(e)}
         ))
         db.commit()
-        # Still return 400 for errors like wrong password in CAS
         raise HTTPException(status_code=400, detail=f"CAS Parse Failed: {str(e)}")
