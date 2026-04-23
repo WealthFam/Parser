@@ -8,8 +8,15 @@ from sqlalchemy.orm import Session
 from rapidfuzz import fuzz
 
 from parser.core import timezone
+from parser.core.classifier import FinancialClassifier
+from parser.core.normalizer import MerchantNormalizer
+from parser.core.validator import TransactionValidator
+from parser.core.guesser import CategoryGuesser
 from parser.db.models import RequestLog, PatternRule, AICallCache
 from parser.schemas.transaction import Transaction, IngestionResult, ParsedItem, AccountInfo, MerchantInfo, TransactionType, TransactionMeta
+from parser.parsers.registry import ParserRegistry
+from parser.parsers.patterns.regex_engine import PatternParser
+from parser.parsers.ai.gemini_parser import GeminiParser
 
 class AIGuardrailBlocked(Exception):
     """Exception raised when content is blocked by AI Guardrail heuristics."""
