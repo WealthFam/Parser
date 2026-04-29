@@ -14,3 +14,4 @@ casparser
 rapidfuzz
 requests
 python-jose[cryptography]
+pdfplumber

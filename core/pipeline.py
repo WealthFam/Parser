@@ -75,6 +75,30 @@ class IngestionPipeline:
                 continue
         return results
 
+    def process_statement_data(self, data: List[dict]) -> List[ParsedItem]:
+        """
+        Process raw bank statement data into a list of WealthFam ParsedItems.
+        """
+        results = []
+        for t_dict in data:
+            try:
+                t = self._convert_to_schema_txn(t_dict)
+                item = ParsedItem(
+                    status="extracted",
+                    transaction=t,
+                    metadata=TransactionMeta(
+                        confidence=1.0,
+                        parser_used="BankStatementParser",
+                        source_original="STATEMENT",
+                        ref_id=str(t_dict.get("ref_id") or "")
+                    )
+                )
+                results.append(item)
+            except Exception as e:
+                logger.error(f"Failed to process statement item: {e}")
+                continue
+        return results
+
     def _convert_to_schema_txn(self, pt: Any, date_hint: Optional[Any] = None) -> Transaction:
         """Helper to convert backend-style ParsedTransaction or dict to microservice Transaction"""
         

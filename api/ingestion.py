@@ -35,6 +35,7 @@ from parser.parsers.bank.generic import GenericSmsParser
 from parser.parsers.registry import ParserRegistry
 from parser.parsers.file.universal_parser import UniversalParser
 from parser.parsers.cas.cas_parser import CasParser
+from parser.parsers.statement.statement_parser import BankStatementParser
 from parser.db.models import FileParsingConfig
 router = APIRouter(prefix="/v1/ingest", tags=["Ingestion"])
 
@@ -92,8 +93,6 @@ ParserRegistry.register_email(BoiEmailParser())
 ParserRegistry.register_email(EpfoEmailParser())
 ParserRegistry.register_email(PpfEmailParser())
 ParserRegistry.register_email(NpsEmailParser())
-
-router = APIRouter(prefix="/v1/ingest", tags=["Ingestion"])
 
 class SmsIngestRequest(BaseModel):
     sender: str
@@ -285,3 +284,51 @@ async def ingest_cas(
         ))
         db.commit()
         raise HTTPException(status_code=400, detail=f"CAS Parse Failed: {str(e)}")
+
+@router.post("/statement", response_model=IngestionResult)
+async def ingest_statement(
+    file: UploadFile = File(...),
+    password: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_current_tenant)
+):
+    content = await file.read()
+    file_hash = hashlib.sha256(content).hexdigest()
+    from parser.db.models import RequestLog
+    
+    try:
+        # 1. Extract raw data from PDF
+        data = BankStatementParser.parse(content, password)
+        
+        # 2. Process into WealthFam schema via Pipeline Service
+        pipeline = IngestionPipeline(db, tenant_id=tenant_id)
+        results = pipeline.process_statement_data(data)
+        
+        output = IngestionResult(
+            status="success" if results else "failed",
+            results=results,
+            logs=[]
+        )
+        
+        # 3. Log extraction result
+        db.add(RequestLog(
+            tenant_id=tenant_id,
+            input_hash=file_hash,
+            source="STATEMENT",
+            status=output.status,
+            input_payload={"filename": file.filename},
+            output_payload=output.model_dump(mode='json')
+        ))
+        
+        db.commit()
+        return output
+    except Exception as e:
+        db.add(RequestLog(
+            tenant_id=tenant_id,
+            input_hash=file_hash,
+            source="STATEMENT",
+            status="failed",
+            output_payload={"error": str(e)}
+        ))
+        db.commit()
+        raise HTTPException(status_code=400, detail=f"Statement Parse Failed: {str(e)}")
