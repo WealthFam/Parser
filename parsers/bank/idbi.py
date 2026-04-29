@@ -26,6 +26,20 @@ class IdbiSmsParser(BaseSmsParser):
                 confidence=0.9,
                 txn_type="DEBIT",
                 field_map={"amount": 1, "type": 2, "mask": 3, "date": 4, "balance": 5}
+            ),
+            # Detailed Debit/Credit (With Det:)
+            TransactionPattern(
+                regex=re.compile(r"(?i)IDBI\s*Bank\s*A/c\s*([xX*]*\w+)\s*(debited|credited).*?(?:INR\.?|Rs\.?)\s*([\d,]+\.?\d*)\s*Det:(.*?)\.\s*Bal.*?(?:INR\.?|Rs\.?)\s*([\d,]+\.?\d*)", re.IGNORECASE),
+                confidence=1.0,
+                txn_type="DEBIT",
+                field_map={"mask": 1, "type": 2, "amount": 3, "recipient": 4, "balance": 5}
+            ),
+            # Net Banking Credit
+            TransactionPattern(
+                regex=re.compile(r"(?i)IDBI\s*Bank\s*A/c\s*([xX*]*\w+)\s*(credited|debited).*?(?:for\s*)?(?:INR\.?|Rs\.?)\s*([\d,]+\.?\d*)\s*through\s*(.*?)\.\s*Bal.*?(?:INR\.?|Rs\.?)\s*([\d,]+\.?\d*)", re.IGNORECASE),
+                confidence=1.0,
+                txn_type="CREDIT",
+                field_map={"mask": 1, "type": 2, "amount": 3, "recipient": 4, "balance": 5}
             )
         ]
 

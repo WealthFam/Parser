@@ -81,6 +81,27 @@ class HdfcSmsParser(BaseSmsParser):
                 confidence=1.0,
                 txn_type="CREDIT",
                 field_map={"amount": 1, "mask": 2, "date": 3, "recipient": 4, "ref_id": 5}
+            ),
+            # IRCTC Refund / Credit Card Adjustment
+            TransactionPattern(
+                regex=re.compile(r"(?i)Alert!\s*(?:Rs\.?|INR\.?)\s*([\d,]+\.?\d*)\s*refunded\s*by\s*(.*?)\s*on\s*([\d/A-Z]+)\s*&\s*adjusted\s*against\s*HDFC\s*Bank\s*Credit\s*Card\s*([xX*]*\d+)", re.IGNORECASE),
+                confidence=1.0,
+                txn_type="CREDIT",
+                field_map={"amount": 1, "recipient": 2, "date": 3, "mask": 4}
+            ),
+            # PPF/SSY Transfer
+            TransactionPattern(
+                regex=re.compile(r"(?i)Alert!\s*(?:Rs\.?|INR\.?)\s*([\d,]+\.?\d*)\s*transferred\s*to\s*your\s*PPF/SSY\s*A/c\s*No\.\s*([xX*]*\w+)\s*via\s*HDFC\s*Bank\s*Online\s*Banking", re.IGNORECASE),
+                confidence=0.9,
+                txn_type="DEBIT",
+                field_map={"amount": 1, "mask": 2}
+            ),
+            # IMPS Sent (HDFC Format)
+            TransactionPattern(
+                regex=re.compile(r"(?i)IMPS\s*(?:Rs\.?|INR\.?)\s*([\d,]+\.?\d*)\s*sent\s*from\s*HDFC\s*Bank\s*A/c\s*([xX*]*\d+)\s*on\s*([\d/:-]+)\s*To\s*A/c\s*(.*?)\s*Ref-(\d+)", re.IGNORECASE),
+                confidence=1.0,
+                txn_type="DEBIT",
+                field_map={"amount": 1, "mask": 2, "date": 3, "recipient": 4, "ref_id": 5}
             )
         ]
 

@@ -72,6 +72,13 @@ class IciciSmsParser(BaseSmsParser):
                 confidence=0.95,
                 txn_type="CREDIT",
                 field_map={"mask": 1, "amount": 2, "date": 3, "recipient": 4, "ref_id": 5}
+            ),
+            # Bill Pay / CC Payment Received
+            TransactionPattern(
+                regex=re.compile(r"(?i)Payment\s*of\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s*has\s*been\s*received\s*on\s*your\s*ICICI\s*Bank\s*Credit\s*Card\s*([xX*]*\d+)\s*through\s*(.*?)\s*on\s*([\d/A-Z-]+)", re.IGNORECASE),
+                confidence=1.0,
+                txn_type="CREDIT",
+                field_map={"amount": 1, "mask": 2, "recipient": 3, "date": 4}
             )
         ]
 
