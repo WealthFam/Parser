@@ -41,8 +41,13 @@ class FinancialClassifier:
         content_lower = content.lower()
         
         # 1. High-Confidence Noise Check (Fast Fail)
-        # OTPs and Login alerts are never transactions we want to track
-        for kw in [r"otp", r"login", r"password", r"verification code", r"kyc update"]:
+        # OTPs, Login alerts, and Bill/Statement notifications are never transactions we want to track
+        fast_fail_keywords = [
+            r"otp", r"login", r"password", r"verification code", r"kyc update",
+            r"total due", r"min\. due", r"minimum due", r"statement:",
+            r"amount due", r"payment due"
+        ]
+        for kw in fast_fail_keywords:
             if re.search(kw, content_lower):
                 return False
         
