@@ -32,7 +32,21 @@ class BankStatementParser:
             
         transactions = []
         try:
-            with pdfplumber.open(temp_path, password=password) as pdf:
+            # Safer initialization for inconsistent pdfplumber/pdfminer environments
+            open_kwargs = {}
+            if password:
+                open_kwargs['password'] = password
+                
+            try:
+                pdf = pdfplumber.open(temp_path, **open_kwargs)
+            except TypeError as te:
+                if "password" in str(te):
+                    logger.warning(f"pdfplumber.open doesn't support password argument in this environment. Retrying without it.")
+                    pdf = pdfplumber.open(temp_path)
+                else:
+                    raise te
+                    
+            with pdf:
                 # 1. Detect Bank Type (Heuristics)
                 first_page_text = pdf.pages[0].extract_text() or ""
                 
@@ -55,9 +69,9 @@ class BankStatementParser:
                         
                 # 5. Last resort: Any 10+ digit number that looks like an account number
                 if not account_match:
-                    account_match = re.search(r'\b\d{10,}\b', first_page_text)
+                    account_match = re.search(r'\b(\d{10,})\b', first_page_text)
 
-                account_mask = account_match.group(1) if account_match else "UNKNOWN"
+                account_mask = account_match.group(1) if (account_match and account_match.groups()) else (account_match.group(0) if account_match else "UNKNOWN")
                 
                 # Normalize to last 4 digits if long number was found
                 if account_mask != "UNKNOWN" and len(account_mask) > 4:
