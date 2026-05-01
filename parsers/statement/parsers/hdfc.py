@@ -25,7 +25,7 @@ def parse_hdfc_statement(pdf, account_mask: str) -> List[Dict[str, Any]]:
                 continue
             
             description = str(row[1])
-            ref_id = str(row[2])
+            ref_id = str(row[2]).strip() if row[2] else None
             
             withdrawal = parse_decimal(row[4])
             deposit = parse_decimal(row[5])

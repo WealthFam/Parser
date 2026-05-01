@@ -13,6 +13,25 @@ def parse_amzn_pay_statement(pdf, account_mask: str) -> List[Dict[str, Any]]:
         if not text:
             continue
             
+        # Fallback mask detection for Amazon Pay / ICICI
+        if account_mask == "UNKNOWN":
+            # 1. Broad detection for any account/card label variations
+            card_match = re.search(r'(?:Account|A/c|Card|Number|No|#)[:\s]*[X\*\s-]*(\d{4,})', text, re.I)
+            if card_match:
+                account_mask = card_match.group(1)[-4:]
+            
+            # 2. Look for any sequence of masking characters followed by digits (e.g. XXXXXXXX8597)
+            if account_mask == "UNKNOWN":
+                card_match = re.search(r'[X\*]{4,}\s*(\d{4})', text, re.I)
+                if card_match:
+                    account_mask = card_match.group(1)
+                
+            # 3. Look for typical card format (e.g. 4315-XXXX-XXXX-7119)
+            if account_mask == "UNKNOWN":
+                card_match = re.search(r'\d{4}[-\s]?[X\*]{4}[-\s]?[X\*]{4}[-\s]?(\d{4})', text, re.I)
+                if card_match:
+                    account_mask = card_match.group(1)
+            
         # Single-line regex: Date SerNo Desc Rewards Amount
         # Example: 14/03/2026 13048181548 AMAZON PAY... IN 57 1,900.00
         pattern = r'(\d{2}/\d{2}/\d{4})\s+(\d{11,})\s+(.*?)\s+(\d+)\s+([\d,]+\.\d{2}(?:\s*CR)?)'
