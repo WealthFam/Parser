@@ -515,9 +515,10 @@ class IngestionPipeline:
                     transaction=parsed_txn,
                     metadata={"confidence": 1.0, "parser_used": "Deduplicator", "source_original": source}
                  )
-                 log.output_payload = item.model_dump(mode='json')
+                 res = IngestionResult(status="success", results=[item], logs=logs)
+                 log.output_payload = res.model_dump(mode='json')
                  self.db.commit()
-                 return IngestionResult(status="success", results=[item], logs=logs)
+                 return res
 
              item = ParsedItem(
                 status="extracted",
@@ -529,12 +530,15 @@ class IngestionPipeline:
             
              # Update Log
              log.status = "success"
-             log.output_payload = item.model_dump(mode='json')
+             res = IngestionResult(status="success", results=[item], logs=logs)
+             log.output_payload = res.model_dump(mode='json')
              self.db.commit()
             
-             return IngestionResult(status="success", results=[item], logs=logs)
+             return res
 
         # Failed
+        res = IngestionResult(status="failed", results=[], logs=logs + ["No parser matched"])
         log.status = "failed"
+        log.output_payload = res.model_dump(mode='json')
         self.db.commit()
-        return IngestionResult(status="failed", results=[], logs=logs + ["No parser matched"])
+        return res
