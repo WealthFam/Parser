@@ -40,9 +40,17 @@ class FinancialClassifier:
         """
         content_lower = content.lower()
         
+        # Bill/Statement notifications are never transactions we want to track
+        # We look for a combination of 'statement' and 'due' to be safe
+        if re.search(r"statement", content_lower) and re.search(r"total due|min\. due|minimum due|amount due|payment due", content_lower):
+            return False
+
         # 1. High-Confidence Noise Check (Fast Fail)
         # OTPs and Login alerts are never transactions we want to track
-        for kw in [r"otp", r"login", r"password", r"verification code", r"kyc update"]:
+        fast_fail_keywords = [
+            r"otp", r"login", r"password", r"verification code", r"kyc update"
+        ]
+        for kw in fast_fail_keywords:
             if re.search(kw, content_lower):
                 return False
         

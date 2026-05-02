@@ -10,7 +10,9 @@ python-dotenv
 apscheduler
 openpyxl
 phonenumbers
-casparser
+pycryptodome
+casparser>=0.5.1
 rapidfuzz
 requests
 python-jose[cryptography]
+pdfplumber

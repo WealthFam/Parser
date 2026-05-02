@@ -81,6 +81,34 @@ class HdfcSmsParser(BaseSmsParser):
                 confidence=1.0,
                 txn_type="CREDIT",
                 field_map={"amount": 1, "mask": 2, "date": 3, "recipient": 4, "ref_id": 5}
+            ),
+            # IRCTC Refund / Credit Card Adjustment
+            TransactionPattern(
+                regex=re.compile(r"(?i)Alert!\s*(?:Rs\.?|INR\.?)\s*([\d,]+\.?\d*)\s*refunded\s*by\s*(.*?)\s*on\s*([\d/A-Z]+)\s*&\s*adjusted\s*against\s*HDFC\s*Bank\s*Credit\s*Card\s*([xX*]*\d+)", re.IGNORECASE),
+                confidence=1.0,
+                txn_type="CREDIT",
+                field_map={"amount": 1, "recipient": 2, "date": 3, "mask": 4}
+            ),
+            # PPF/SSY Transfer
+            TransactionPattern(
+                regex=re.compile(r"(?i)Alert!\s*(?:Rs\.?|INR\.?)\s*([\d,]+\.?\d*)\s*transferred\s*to\s*your\s*PPF/SSY\s*A/c\s*No\.\s*([xX*]*\w+)\s*via\s*HDFC\s*Bank\s*Online\s*Banking", re.IGNORECASE),
+                confidence=0.9,
+                txn_type="DEBIT",
+                field_map={"amount": 1, "mask": 2}
+            ),
+            # IMPS Sent (HDFC Format)
+            TransactionPattern(
+                regex=re.compile(r"(?i)IMPS\s*(?:Rs\.?|INR\.?)\s*([\d,]+\.?\d*)\s*sent\s*from\s*HDFC\s*Bank\s*A/c\s*([xX*]*\d+)\s*on\s*([\d/:-]+)\s*To\s*A/c\s*(.*?)\s*Ref-(\d+)", re.IGNORECASE),
+                confidence=1.0,
+                txn_type="DEBIT",
+                field_map={"amount": 1, "mask": 2, "date": 3, "recipient": 4, "ref_id": 5}
+            ),
+            # UPI / Asterisk Mask Format (Targeted Fix)
+            TransactionPattern(
+                regex=re.compile(r"(?i)(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s*debited\s*from\s*a/c\s*([\*\d]+)\s*on\s*([\d/:-]+)\s*to\s*(.*?)\s*(?:\.|\s*\(|Ref|$)", re.IGNORECASE),
+                confidence=1.0,
+                txn_type="DEBIT",
+                field_map={"amount": 1, "mask": 2, "date": 3, "recipient": 4}
             )
         ]
 
@@ -91,6 +119,18 @@ class HdfcSmsParser(BaseSmsParser):
         for tx in results:
             tx.balance = self._find_balance(content)
             tx.credit_limit = self._find_limit(content)
+            
+            # Extract Ref ID if not caught by regex or if it's a generated one
+            if not tx.ref_id or tx.ref_id.startswith("GEN-"):
+                ref_match = self.REF_PATTERN.search(content)
+                if ref_match:
+                    tx.ref_id = ref_match.group(1).strip()
+                else:
+                    # Fallback for UPI Ref No. format
+                    upi_match = re.search(r"(?i)Ref\s*(?:No|ID)?[:\.\s-]+(\d+)", content)
+                    if upi_match:
+                        tx.ref_id = upi_match.group(1)
+
             if tx.ref_id and tx.amount and tx.date and tx.recipient:
                 tx.confidence = max(tx.confidence, 0.95)
         return results
@@ -104,6 +144,7 @@ class HdfcSmsParser(BaseSmsParser):
 
     BAL_PATTERN = re.compile(r"(?i)(?:Avbl\s*Bal|Bal|Balance)[:\.\s-]+(?:Rs\.?|INR)\s*([\d,]+\.?\d*)", re.IGNORECASE)
     LIMIT_PATTERN = re.compile(r"(?i)(?:Credit\s*Limit|Limit)[:\.\s-]+(?:Rs\.?|INR)\s*([\d,]+\.?\d*)", re.IGNORECASE)
+    REF_PATTERN = re.compile(r"(?i)\b(?:Ref|UTR|TXN#|Ref\s*No|Reference\s*ID|reference\s*number|utr\s*no|Ref\s*ID)(?:[\s:\.-]|\bis\b)+([a-zA-Z0-9]{3,})", re.IGNORECASE)
 
     def _find_balance(self, content: str) -> Optional[Decimal]:
         match = self.BAL_PATTERN.search(content)
