@@ -61,7 +61,7 @@ class AIGuardrail:
 
         # 3. Contextual Monetary Validation
         # Does it have a standard currency pattern? (Rs. 500, INR 5,000.00, ₹ 50)
-        has_currency_pattern = bool(re.search(r'(?i)(?:rs\.?|inr|₹|usd|\$)\s*[\d,]+(?:\.\d+)?', content_lower))
+        has_currency_pattern = bool(re.search(r'(?i)(?:rs\.?|inr\.?|₹\.?|usd\.?|\$)\s*[\d,]+(?:\.\d+)?', content_lower))
         
         if has_currency_pattern:
             return True # Clear monetary amount detected, safe to let AI try
