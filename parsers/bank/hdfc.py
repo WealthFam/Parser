@@ -165,6 +165,14 @@ class HdfcEmailParser(BaseEmailParser):
 
     def get_patterns(self) -> List[TransactionPattern]:
         return [
+            # UPI Debit (InstaAlert - Dear Customer Format)
+            TransactionPattern(
+                regex=re.compile(r"(?i)Dear\s*Customer,?\s*Rs\.?\s*([\d,]+\.?\d*)\s*has\s*been\s*debited\s*from\s*account\s*(\d+)\s*to\s*(.*?)\s*on\s*([\d-]+)\.\s*Your\s*UPI\s*transaction\s*reference\s*number\s*is\s*([a-zA-Z0-9]+)", re.IGNORECASE),
+                confidence=1.0,
+                txn_type="DEBIT",
+                field_map={"amount": 1, "mask": 2, "recipient": 3, "date": 4, "ref_id": 5},
+                source="EMAIL"
+            ),
             # UPI Debit (Direct InstaAlert Format)
             TransactionPattern(
                 regex=re.compile(r"(?i)Rs\.?\s*([\d,]+\.?\d*)\s*has\s*been\s*debited\s*from\s*(?:account|A/c)\s*(\d+)\s*to\s*(.*?)\s*on\s*([\d-]+)\.\s*Your\s*UPI\s*transaction\s*reference\s*number\s*is\s*([a-zA-Z0-9]+)", re.IGNORECASE),
@@ -246,6 +254,12 @@ class HdfcEmailParser(BaseEmailParser):
 
             tx.balance = self._find_balance(content)
             tx.credit_limit = self._find_limit(content)
+
+            # Auto-categorize Mutual Funds
+            if tx.recipient and "MUTUAL FUNDS" in tx.recipient.upper():
+                tx.category = "Investment"
+            elif tx.recipient and "GROWW" in tx.recipient.upper():
+                tx.category = "Investment"
         return results
 
     def can_handle(self, subject: str, body: str) -> bool:
