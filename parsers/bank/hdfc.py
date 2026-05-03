@@ -98,45 +98,25 @@ class HdfcSmsParser(BaseSmsParser):
             ),
             # IMPS Sent (HDFC Format)
             TransactionPattern(
-                regex=re.compile(r"(?i)IMPS\s*(?:Rs\.?|INR\.?)\s*([\d,]+\.?\d*)\s*sent\s*from\s*HDFC\s*Bank\s*A/c\s*([xX*]*\d+)\s*on\s*([\d/:-]+)\s*To\s*A/c\s*(.*?)\s*Ref-(\d+)", re.IGNORECASE),
+                regex=re.compile(r"(?i)IMPS\s*(?:of|for)?\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s*Sent\s*from\s*HDFC\s*Bank\s*A/c\s*(?:.*?|x*|\*|X*)(\d+)\s*to\s*(.*?)\s*on\s*([\d/:-]+).*?(?:Ref|UTR)[:\.\s]+(\w+)", re.IGNORECASE),
                 confidence=1.0,
                 txn_type="DEBIT",
-                field_map={"amount": 1, "mask": 2, "date": 3, "recipient": 4, "ref_id": 5}
+                field_map={"amount": 1, "mask": 2, "recipient": 3, "date": 4, "ref_id": 5}
             ),
-            # UPI / Asterisk Mask Format (Targeted Fix)
+            # EMI Transaction
             TransactionPattern(
-                regex=re.compile(r"(?i)(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s*debited\s*from\s*a/c\s*([\*\d]+)\s*on\s*([\d/:-]+)\s*to\s*(.*?)\s*(?:\.|\s*\(|Ref|$)", re.IGNORECASE),
-                confidence=1.0,
+                regex=re.compile(r"(?i)Alert:\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s*spent\s*on\s*HDFC\s*Bank\s*Credit\s*Card\s*ending\s*(\d+)\s*at\s*(.*?)\s*on\s*([\d-]+)\s*converted\s*to\s*EMI", re.IGNORECASE),
+                confidence=0.9,
                 txn_type="DEBIT",
-                field_map={"amount": 1, "mask": 2, "date": 3, "recipient": 4}
+                field_map={"amount": 1, "mask": 2, "recipient": 3, "date": 4}
             )
         ]
 
-    # Confidence Adjustment (Simplified implementation)
-    def parse_with_confidence(self, content: str, date_hint: Optional[datetime] = None) -> List[ParsedTransaction]:
-        results = super().parse_with_confidence(content, date_hint)
-        # Post-process to find balance/limit and adjust confidence if all fields are present
-        for tx in results:
-            tx.balance = self._find_balance(content)
-            tx.credit_limit = self._find_limit(content)
-            
-            # Extract Ref ID if not caught by regex or if it's a generated one
-            if not tx.ref_id or tx.ref_id.startswith("GEN-"):
-                ref_match = self.REF_PATTERN.search(content)
-                if ref_match:
-                    tx.ref_id = ref_match.group(1).strip()
-                else:
-                    # Fallback for UPI Ref No. format
-                    upi_match = re.search(r"(?i)Ref\s*(?:No|ID)?[:\.\s-]+(\d+)", content)
-                    if upi_match:
-                        tx.ref_id = upi_match.group(1)
-
-            if tx.ref_id and tx.amount and tx.date and tx.recipient:
-                tx.confidence = max(tx.confidence, 0.95)
-        return results
-
     def can_handle(self, sender: str, message: str) -> bool:
-        return "hdfc" in sender.lower() or "hdfc" in message.lower()
+        combined = (sender + " " + message).lower()
+        if "hdfc" not in combined: return False
+        keywords = ["transaction", "debited", "spent", "txn", "upi", "vpa", "rs"]
+        return any(k in combined for k in keywords)
 
     def parse(self, content: str, date_hint: Optional[datetime] = None) -> Optional[ParsedTransaction]:
         matches = self.parse_with_confidence(content, date_hint)
@@ -164,6 +144,22 @@ class HdfcEmailParser(BaseEmailParser):
 
     def get_patterns(self) -> List[TransactionPattern]:
         return [
+            # UPI Debit (Direct InstaAlert Format)
+            TransactionPattern(
+                regex=re.compile(r"(?i)Rs\.?\s*([\d,]+\.?\d*)\s*has\s*been\s*debited\s*from\s*(?:account|A/c)\s*(\d+)\s*to\s*(.*?)\s*on\s*([\d-]+)\.\s*Your\s*UPI\s*transaction\s*reference\s*number\s*is\s*([a-zA-Z0-9]+)", re.IGNORECASE),
+                confidence=1.0,
+                txn_type="DEBIT",
+                field_map={"amount": 1, "mask": 2, "recipient": 3, "date": 4, "ref_id": 5},
+                source="EMAIL"
+            ),
+            # UPI Debit (Ultra-Robust Fallback)
+            TransactionPattern(
+                regex=re.compile(r"(?i)Rs\.?\s*([\d,]+\.?\d*)\s*has\s*been\s*debited.*?from.*?(?:account|A/c).*?(\d+).*?to\s*(.*?)\s*on\s*([\d-]+)", re.IGNORECASE),
+                confidence=0.8,
+                txn_type="DEBIT",
+                field_map={"amount": 1, "mask": 2, "recipient": 3, "date": 4},
+                source="EMAIL"
+            ),
             # Debit Card (made a transaction)
             TransactionPattern(
                 regex=re.compile(r"(?i)made\s*a\s*transaction\s*of\s*(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s*on\s*your\s*HDFC\s*Bank\s*.*?(?:Card)\s*(?:.*?|x*|X*)(\d+)\s*at\s*(.*?)\s*on\s*([\d-]+)(?:.*?Ref[:\.\s]+(\w+))?", re.IGNORECASE),
@@ -188,7 +184,7 @@ class HdfcEmailParser(BaseEmailParser):
                 field_map={"mask": 1, "amount": 2, "date": 3, "recipient": 4, "ref_id": 5},
                 source="EMAIL"
             ),
-            # UPI Debit
+            # UPI Debit (Original Flexible)
             TransactionPattern(
                 regex=re.compile(r"(?i)(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s*has\s*been\s*debited\s*from\s*account\s*(\d+)\s*to\s*(.*?)\s*on\s*([\d-]+)(?:.*?\b(?:Ref|Reference)\s*(?:No|ID|Number)?(?:[\s:\.-]|\bis\b)+([a-zA-Z0-9]+))?", re.IGNORECASE),
                 confidence=1.0,
@@ -196,12 +192,20 @@ class HdfcEmailParser(BaseEmailParser):
                 field_map={"amount": 1, "mask": 2, "recipient": 3, "date": 4, "ref_id": 5},
                 source="EMAIL"
             ),
-            # Generic UPI
+            # Generic UPI (Original)
             TransactionPattern(
                 regex=re.compile(r"(?i)UPI\s*txn.*?([\d,]+\.?\d*)\s*debited\s*from\s*A/c\s*(?:.*?|x*|X*)(\d+)\s*to\s*(.*?)\s*on\s*([\d-]+)(?:.*?\b(?:Ref|Reference)\s*(?:No|ID|Number)?(?:[\s:\.-]|\bis\b)+([a-zA-Z0-9]+))?", re.IGNORECASE),
                 confidence=1.0,
                 txn_type="DEBIT",
                 field_map={"amount": 1, "mask": 2, "recipient": 3, "date": 4, "ref_id": 5},
+                source="EMAIL"
+            ),
+            # Credit Card Debit (Direct Format)
+            TransactionPattern(
+                regex=re.compile(r"(?i)Rs\.?\s*([\d,]+\.?\d*)\s*has\s*been\s*debited\s*from\s*your\s*HDFC\s*Bank\s*Credit\s*Card\s*ending\s*(\d+)\s*towards\s*(.*?)\s*on\s*([\d\s\w,:]+)", re.IGNORECASE),
+                confidence=1.0,
+                txn_type="DEBIT",
+                field_map={"amount": 1, "mask": 2, "recipient": 3, "date": 4},
                 source="EMAIL"
             )
         ]
@@ -225,7 +229,7 @@ class HdfcEmailParser(BaseEmailParser):
 
     def can_handle(self, subject: str, body: str) -> bool:
         combined = (subject + " " + body).lower()
-        if "you have done a upi txn" in combined: return True
+        if "you have done a upi" in combined: return True
         if "hdfc" not in combined: return False
         keywords = ["transaction", "debited", "spent", "txn", "upi", "vpa", "rs"]
         return any(k in combined for k in keywords)

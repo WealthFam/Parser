@@ -14,6 +14,7 @@ class ParsedTransaction(BaseModel):
     type: str  # DEBIT or CREDIT
     account_mask: Optional[str] = None
     recipient: Optional[str] = None
+    merchant: Optional[str] = None
     category: Optional[str] = None
     ref_id: Optional[str] = None
     balance: Optional[Decimal] = None
@@ -84,6 +85,7 @@ class BaseParser(ABC):
                         type=p.txn_type,
                         account_mask=self._parse_mask(fields.get("mask")),
                         recipient=fields.get("recipient"),
+                        merchant=fields.get("merchant") or fields.get("recipient"),
                         ref_id=fields.get("ref_id"),
                         balance=Decimal(fields.get("balance").replace(",", "")) if fields.get("balance") else None,
                         raw_message=content,

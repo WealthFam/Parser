@@ -34,25 +34,26 @@ class FinancialClassifier:
     ]
 
     @staticmethod
-    def is_financial(content: str, source: str = "SMS") -> bool:
+    def is_financial(content: str, source: str = "SMS") -> tuple[bool, str]:
         """
         Heuristic check: filters noise while preserving valid bank alerts.
+        Returns (is_financial, reason)
         """
         content_lower = content.lower()
         
         # Bill/Statement notifications are never transactions we want to track
         # We look for a combination of 'statement' and 'due' to be safe
         if re.search(r"statement", content_lower) and re.search(r"total due|min\. due|minimum due|amount due|payment due", content_lower):
-            return False
+            return False, "Statement/Bill notification"
 
         # 1. High-Confidence Noise Check (Fast Fail)
-        # OTPs and Login alerts are never transactions we want to track
+        # OTPs and sensitive verification codes are never transactions we want to track
         fast_fail_keywords = [
-            r"otp", r"login", r"password", r"verification code", r"kyc update"
+            r"otp", r"verification code", r"kyc update"
         ]
         for kw in fast_fail_keywords:
             if re.search(kw, content_lower):
-                return False
+                return False, f"Fast-fail keyword matched: {kw}"
         
         # 2. Score and Detect Noise
         score = 0
@@ -82,19 +83,25 @@ class FinancialClassifier:
         # 4. Strict Mode for Emails or Noise-Prone content
         # If noise is detected, we MUST see a clear monetary pattern to proceed
         if noise_detected or source == "EMAIL":
-            # Strict Monetary Pattern: Currency + Number (e.g. Rs. 100, INR 5,000, ₹ 50)
-            has_monetary_pattern = bool(re.search(r'(?i)(?:rs\.?|inr|₹)\s*[\d,]+', content_lower))
+            # Strict Monetary Pattern: Currency + Number (e.g. Rs. 100, INR 5,000, ₹ 50.00)
+            has_monetary_pattern = bool(re.search(r'(?i)(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?', content_lower))
             
             if noise_detected and not has_monetary_pattern:
-                return False # Instantly fail if noise exists but no clear money
+                return False, "Noise detected but no clear monetary pattern found (Strict Mode)"
             
             # If it's an email, even without explicit noise, we require a slightly higher bar
             if source == "EMAIL" and not has_monetary_pattern and not has_strong_signal:
-                 return False
+                 return False, "Email requires explicit monetary pattern or strong signal"
 
         # Threshold Logic:
         # - If it has a strong signal and isn't overwhelmed by noise, we keep it.
+        result = False
+        reason = ""
         if has_strong_signal:
-            return (score - penalty) >= 0
+            result = (score - penalty) >= 0
+            reason = f"Strong signal found. Score: {score}, Penalty: {penalty}"
+        else:
+            result = (score - penalty) >= 1
+            reason = f"Normal score check. Score: {score}, Penalty: {penalty}"
         
-        return (score - penalty) >= 1
+        return result, reason

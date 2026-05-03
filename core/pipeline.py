@@ -244,13 +244,16 @@ class IngestionPipeline:
         logs = []
 
         # 2. Classification
-        if not FinancialClassifier.is_financial(content, source):
+        is_fin, reason = FinancialClassifier.is_financial(content, source)
+        logs.append(f"Classification: {reason}")
+        
+        if not is_fin:
             log.status = "ignored"
             self.db.commit()
-            return IngestionResult(status="ignored", results=[], logs=["Classified as non-financial"])
+            return IngestionResult(status="ignored", results=[], logs=logs)
 
         # 3. Extraction Chain
-        potential_matches: list[Any] = [] # List of ParsedTransaction
+        potential_matches: list[dict] = [] # List of {"txn": ParsedTransaction, "parser": str}
         parsed_txn = None
         
         # A. Static Bank Parsers
@@ -270,8 +273,8 @@ class IngestionPipeline:
                     # Try confidence-based parsing first
                     if hasattr(p, 'parse_with_confidence'):
                         matches = p.parse_with_confidence(content, date_hint=date_hint)
-                        if matches:
-                            potential_matches.extend(matches)
+                        for m in matches:
+                            potential_matches.append({"txn": m, "parser": type(p).__name__})
                     
                     # Fallback to legacy parse if no matches yet (for parsers not yet refactored)
                     if not potential_matches:
@@ -280,30 +283,32 @@ class IngestionPipeline:
                         else:
                             pt = p.parse(content)
                         if pt:
-                            # Assign a default confidence if missing
                             if not hasattr(pt, 'confidence') or pt.confidence is None:
                                 pt.confidence = 0.8
-                            potential_matches.append(pt)
+                            potential_matches.append({"txn": pt, "parser": type(p).__name__})
                 except Exception as e:
                     logs.append(f"Parser {type(p).__name__} failed: {str(e)}")
 
         # B. User Patterns (as a fallback or secondary engine)
-        if not potential_matches or max(m.confidence for m in potential_matches) < 0.9:
+        if not potential_matches or max(m["txn"].confidence for m in potential_matches) < 0.9:
             try:
                 p_parser = PatternParser(self.db, source, tenant_id=self.tenant_id)
                 pt = p_parser.parse(content)
                 if pt:
                     if not hasattr(pt, 'confidence') or pt.confidence is None:
-                        pt.confidence = 0.9  # Learned patterns are actually quite high confidence
-                    potential_matches.append(pt)
+                        pt.confidence = 0.9
+                    potential_matches.append({"txn": pt, "parser": "PatternParser"})
             except Exception as e:
                 logs.append(f"Pattern Parser failed: {str(e)}")
 
         # C. AI Fallback (Trigger if no high-confidence match)
-        best_regex_match = None
+        best_match_obj = None
         if potential_matches:
-            potential_matches.sort(key=lambda x: x.confidence, reverse=True)
-            best_regex_match = potential_matches[0]
+            potential_matches.sort(key=lambda x: x["txn"].confidence, reverse=True)
+            best_match_obj = potential_matches[0]
+
+        best_regex_match = best_match_obj["txn"] if best_match_obj else None
+        parser_used = best_match_obj["parser"] if best_match_obj else "None"
 
         if not best_regex_match or best_regex_match.confidence < 0.9:
             try:
@@ -393,14 +398,16 @@ class IngestionPipeline:
                         logs.append("Extracted via AI (High Confidence)")
                     else:
                         parsed_txn = self._convert_to_schema_txn(best_regex_match, date_hint=date_hint)
-                        parser_used = "Best Regex"
+                        # parser_used is already set to the specific regex parser name
+                        logs.append(f"Extracted via {parser_used} (Regex matched better than AI)")
                 else:
                     if ai_data and ai_data.get("error"):
                         logs.append(f"AI Error: {ai_data['error']}")
 
                     if best_regex_match:
                         parsed_txn = self._convert_to_schema_txn(best_regex_match, date_hint=date_hint)
-                        parser_used = "Best Regex (AI Failed)"
+                        # parser_used is already set
+                        logs.append(f"AI Failed - Falling back to {parser_used}")
             except AIGuardrailBlocked:
                 pass
             except Exception as e:
@@ -408,10 +415,12 @@ class IngestionPipeline:
                 logs.append(f"AI Parser failed: {str(e)}")
                 if best_regex_match:
                     parsed_txn = self._convert_to_schema_txn(best_regex_match, date_hint=date_hint)
-                    parser_used = "Best Regex (AI Error)"
+                    # parser_used is already set
+                    logs.append(f"AI Error - Falling back to {parser_used}")
         else:
             parsed_txn = self._convert_to_schema_txn(best_regex_match, date_hint=date_hint)
-            parser_used = f"{best_regex_match.source if hasattr(best_regex_match, 'source') else 'Regex'} ({best_regex_match.confidence})"
+            # parser_used is already set to the specific regex parser name
+            parser_used = f"{parser_used} ({best_regex_match.confidence})"
 
 
         # 4. Normalization & Validation

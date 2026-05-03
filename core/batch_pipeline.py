@@ -6,6 +6,7 @@ from parser.schemas.transaction import IngestionResult, ParsedItem, TransactionM
 from parser.parsers.patterns.regex_engine import PatternParser
 from parser.parsers.ai.batch_gemini_parser import BatchGeminiParser
 from parser.core.ai_filter import AIGuardrail
+from parser.parsers.registry import ParserRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +23,60 @@ class BatchIngestionPipeline:
         results_map = {}
         ai_queue = []
 
-        # 1. First Pass: Regex and User Patterns (Fast Path)
+            # 1. First Pass: Static Parsers and Regex Patterns (Fast Path)
         for item in items:
             content = item.get("content", "")
             item_id = item.get("id")
+            subject = item.get("subject", "")
+            sender = item.get("sender", "")
             
+            # A. Static Bank Parsers (High Confidence)
+            parsers = ParserRegistry.get_email_parsers() if source == "EMAIL" else ParserRegistry.get_sms_parsers()
+            found_static = False
+            for p in parsers:
+                try:
+                    can_handle = p.can_handle(subject, content) if source == "EMAIL" else p.can_handle(sender, content)
+                    if can_handle:
+                        logger.info(f"BatchPipeline: Parser {type(p).__name__} can handle item {item_id}")
+                        pt = p.parse(content)
+                        if pt:
+                            logger.info(f"BatchPipeline: {type(p).__name__} SUCCESS for item {item_id}")
+                            
+                            # Robust field extraction (handle both merchant/recipient naming)
+                            m_name = getattr(pt, 'merchant', None) or getattr(pt, 'recipient', None) or pt.description
+                            
+                            parsed = ParsedItem(
+                                status="extracted",
+                                transaction=Transaction(
+                                    amount=pt.amount,
+                                    type=pt.type,
+                                    date=pt.date,
+                                    account={"mask": pt.account_mask},
+                                    merchant={"raw": m_name},
+                                    recipient=pt.recipient or m_name,
+                                    description=pt.description,
+                                    raw_message=content
+                                ),
+                                metadata=TransactionMeta(
+                                    confidence=getattr(pt, 'confidence', 0.95), 
+                                    parser_used=type(p).__name__, 
+                                    source_original=source
+                                )
+                            )
+                            results_map[item_id] = IngestionResult(status="success", results=[parsed], logs=[f"Parsed via {type(p).__name__}"])
+                            found_static = True
+                            break
+                        else:
+                            logger.info(f"BatchPipeline: {type(p).__name__} returned None for item {item_id}")
+                except Exception as e:
+                    logger.error(f"BatchPipeline: Static parser {type(p).__name__} failed for item {item_id}: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            
+            if found_static:
+                continue
+
+            # B. User Patterns (Regex)
             p_parser = PatternParser(self.db, source, tenant_id=self.tenant_id)
             pt = p_parser.parse(content)
             
@@ -46,6 +96,7 @@ class BatchIngestionPipeline:
                 results_map[item_id] = IngestionResult(status="success", results=[parsed], logs=["Parsed via Regex"])
                 continue
                 
+            # C. AI Queueing
             if AIGuardrail.should_allow_ai_parsing(content, source):
                 ai_queue.append(item)
             else:

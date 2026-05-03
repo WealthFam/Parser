@@ -11,10 +11,8 @@ class AIGuardrail:
 
     # Extremely high confidence noise that should NEVER hit the AI
     STRICT_NOISE_KEYWORDS = [
-        # E-commerce & Logistics
         r"\border confirmed\b", r"\bshipped\b", r"\bout for delivery\b", 
         r"\barriving today\b", r"\btrack your order\b", r"\bdelivered\b",
-        r"\bswiggy\b", r"\bzomato\b", r"\buber\b", r"\bola\b", r"\bblinkit\b", r"\bzepto\b",
         # Marketing & Subscriptions
         r"\bunsubscribe\b", r"\bview in browser\b", r"\bnewsletter\b",
         r"\bsale\b", r"\boffer valid\b", r"\bexclusive access\b", r"\bdiscount\b", r"\bcoupon\b",

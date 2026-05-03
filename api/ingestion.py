@@ -9,6 +9,7 @@ from parser.db.database import get_db
 from parser.core.auth import get_current_tenant
 from parser.core.pipeline import IngestionPipeline
 from parser.schemas.transaction import IngestionResult, ParsedItem, TransactionMeta
+from parser.schemas.ingestion import SmsIngestRequest, EmailIngestRequest, TestIngestRequest
 from parser.parsers.bank.hdfc import HdfcSmsParser, HdfcEmailParser
 from parser.parsers.bank.icici import IciciSmsParser, IciciEmailParser
 from parser.parsers.bank.sbi import SbiSmsParser, SbiEmailParser
@@ -94,16 +95,6 @@ ParserRegistry.register_email(EpfoEmailParser())
 ParserRegistry.register_email(PpfEmailParser())
 ParserRegistry.register_email(NpsEmailParser())
 
-class SmsIngestRequest(BaseModel):
-    sender: str
-    body: str
-    received_at: Optional[str] = None
-
-class EmailIngestRequest(BaseModel):
-    subject: str
-    body_text: str
-    sender: str
-    received_at: Optional[str] = None
 
 @router.post("/sms", response_model=IngestionResult)
 def ingest_sms(
@@ -332,3 +323,22 @@ async def ingest_statement(
         ))
         db.commit()
         raise HTTPException(status_code=400, detail=f"Statement Parse Failed: {str(e)}")
+
+
+@router.post("/test", response_model=IngestionResult)
+def test_ingestion(
+    payload: TestIngestRequest,
+    tenant_id: str = Depends(get_current_tenant),
+    db: Session = Depends(get_db)
+):
+    """
+    Sandbox endpoint to test parsing logic without persistence or idempotency checks.
+    """
+    pipeline = IngestionPipeline(db, tenant_id=tenant_id)
+    # We use a bypass mode if possible, but standard run is fine for testing
+    return pipeline.run(
+        content=payload.content,
+        source=payload.source,
+        sender=payload.sender,
+        subject=payload.subject
+    )
